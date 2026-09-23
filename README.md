@@ -20,20 +20,9 @@ You can also set `TYPESAFE_API_KEY` in the environment that starts the Omarchy s
 
 ## Open it
 
-From a terminal:
-
 ```bash
 omarchy-shell shell toggle jev.emoji
 ```
-
-To use the normal emoji key, add this to `~/.config/hypr/bindings.lua`:
-
-```lua
-hl.unbind("SUPER + CTRL + E")
-o.bind("SUPER + CTRL + E", "Jev emoji", "omarchy-shell shell toggle jev.emoji")
-```
-
-`Super + Ctrl + E` was the built-in emoji picker. The lines above replace that key.
 
 To show it in the Omarchy menu, add this to `~/.config/omarchy/extensions/omarchy-menu.jsonc`:
 
@@ -46,12 +35,6 @@ To show it in the Omarchy menu, add this to `~/.config/omarchy/extensions/omarch
 ```
 
 Then search for `jev` or `emoji` with **Super + Space**.
-
-To turn the built-in picker off:
-
-```bash
-omarchy plugin disable omarchy.emojis
-```
 
 ## Update
 
