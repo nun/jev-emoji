@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "jev.emoji",
+  "name": "Jev emoji",
+  "version": "1.0.0",
+  "author": "nun",
+  "description": "Type words. Jev scores every emoji and shows the best matches first.",
+  "kinds": ["overlay"],
+  "keepLoaded": true,
+  "entryPoints": {
+    "overlay": "Emojis.qml"
+  }
+}
