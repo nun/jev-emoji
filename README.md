@@ -24,18 +24,6 @@ You can also set `TYPESAFE_API_KEY` in the environment that starts the Omarchy s
 omarchy-shell shell toggle jev.emoji
 ```
 
-To show it in the Omarchy menu, add this to `~/.config/omarchy/extensions/omarchy-menu.jsonc`:
-
-```jsonc
-"trigger.emoji": {
-  "label": "Jev emoji",
-  "description": "Search by meaning",
-  "action": "omarchy-shell shell toggle jev.emoji"
-}
-```
-
-Then search for `jev` or `emoji` with **Super + Space**.
-
 ## Update
 
 ```bash
