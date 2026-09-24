@@ -34,4 +34,6 @@ omarchy plugin update jev.emoji
 
 Each search sends the words you typed to Jev, once for every emoji. Jev returns a probability from 0 to 1. This plugin keeps the emojis at 0.5 or higher and sorts them from high to low.
 
+The picker waits until you pause typing, then asks Jev once. A search that is already running is left to finish. The next one is sent only for the text you paused on, so a half-finished word does not spend another full request.
+
 That call uses your TypeSafe account. A short search still asks about the full emoji list, in a few parallel requests.

@@ -18,7 +18,11 @@ Item {
   property string statusText: "Type what you want to say"
   property int searchGen: 0
   property int inflightGen: -1
-  property bool queued: false
+  property string inflightText: ""
+  property bool searchStopping: false
+  // A search scores the whole catalog. Wait out a typing burst so Jev is
+  // asked once for the finished words, not once per key.
+  readonly property int searchDebounceMs: 800
   property bool needsKey: false
   property string setupStatus: ""
   property string pendingToken: ""
@@ -49,7 +53,11 @@ Item {
     root.cursorActive = false
     root.statusText = "Type what you want to say"
     root.searchGen++
-    root.queued = false
+    root.inflightText = ""
+    root.searchStopping = searchProc.running
+    searchTimer.stop()
+    if (searchProc.running)
+      searchProc.running = false
     displayModel.clear()
     tokenField.text = ""
     root.checkKey()
@@ -120,7 +128,9 @@ Item {
   function dismiss() {
     root.opened = false
     root.searchGen++
-    root.queued = false
+    root.inflightText = ""
+    searchTimer.stop()
+    root.searchStopping = searchProc.running
     if (searchProc.running)
       searchProc.running = false
     if (root.shell && typeof root.shell.hide === "function")
@@ -143,20 +153,13 @@ Item {
     root.filterText = nextFilter
     root.selectedIndex = 0
     root.cursorActive = false
-    root.searchGen++
-    root.queued = false
     displayModel.clear()
     var text = nextFilter.trim()
-    if (!text) {
-      root.statusText = "Type what you want to say"
-      searchTimer.stop()
-      if (searchProc.running)
-        searchProc.running = false
-      return
-    }
     if (text.length < 2) {
-      root.statusText = "Type a bit more"
+      root.searchGen++
+      root.statusText = text ? "Type a bit more" : "Type what you want to say"
       searchTimer.stop()
+      root.searchStopping = searchProc.running
       if (searchProc.running)
         searchProc.running = false
       return
@@ -166,29 +169,31 @@ Item {
   }
 
   function runSearch() {
+    if (!root.opened || root.searchStopping || searchProc.running)
+      return
     var text = root.filterText.trim()
-    if (text.length < 2) {
-      root.queued = false
+    if (text.length < 2)
       return
-    }
-    if (searchProc.running) {
-      root.queued = true
-      searchProc.running = false
-      return
-    }
     root.inflightGen = root.searchGen
+    root.inflightText = text
     searchProc.command = ["python3", root.scriptPath(), text]
     searchProc.running = true
   }
 
   function onSearchFinished(exitCode, stdout, stderr) {
-    if (root.queued) {
-      root.queued = false
-      root.runSearch()
+    root.searchStopping = false
+    if (!root.opened)
+      return
+    var text = root.filterText.trim()
+    // Typing moved on, or this process was cancelled. Keep the result only
+    // when it is still the text in the box. Otherwise one later search covers
+    // whatever the user paused on.
+    if (root.inflightGen !== root.searchGen || root.inflightText !== text) {
+      if (!searchTimer.running)
+        root.runSearch()
       return
     }
-    if (root.inflightGen !== root.searchGen)
-      return
+    searchTimer.stop()
     var line = String(stdout || "").trim()
     var parts = line.split("\n")
     line = parts.length ? parts[parts.length - 1] : ""
@@ -314,7 +319,7 @@ Item {
 
   Timer {
     id: searchTimer
-    interval: 400
+    interval: root.searchDebounceMs
     repeat: false
     onTriggered: root.runSearch()
   }
