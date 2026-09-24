@@ -30,6 +30,20 @@ omarchy-shell shell toggle jev.emoji
 omarchy plugin update jev.emoji
 ```
 
+## Remove
+
+```bash
+omarchy plugin remove jev.emoji
+```
+
+That removes the plugin. The API key stays in `~/.config/jev-emoji/api-key`. Delete that file if you want the key gone too.
+
+## License
+
+MIT. See `LICENSE`.
+
+This plugin needs Python 3 and a TypeSafe API key. A search calls `https://api.typesafe.ai`.
+
 ## How a search works
 
 Each search sends the words you typed to Jev, once for every emoji. Jev returns a probability from 0 to 1. This plugin keeps the emojis at 0.5 or higher and sorts them from high to low.
