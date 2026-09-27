@@ -15,6 +15,32 @@ def catalog(count):
     return [{"e": chr(0x1F600 + (i % 50)), "k": f"name {i}"} for i in range(count)]
 
 
+class FakeResponse:
+    def __init__(self, data):
+        self.stream = io.BytesIO(data)
+        self.read_sizes = []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+    def read(self, size=-1):
+        self.read_sizes.append(size)
+        return self.stream.read(size)
+
+
+class TrackingBytesIO(io.BytesIO):
+    def __init__(self, data):
+        super().__init__(data)
+        self.read_sizes = []
+
+    def read(self, size=-1):
+        self.read_sizes.append(size)
+        return super().read(size)
+
+
 class SearchTests(unittest.TestCase):
     def test_every_emoji_is_scored_once(self):
         previous = search.BATCH_SIZE
@@ -68,6 +94,27 @@ class SearchTests(unittest.TestCase):
         ranked = search.rank_fits(candidates, answers)
         self.assertEqual([row["e"] for row in ranked], ["😴", "🍕"])
         self.assertGreater(ranked[0]["p"], ranked[1]["p"])
+
+    def test_api_response_read_has_a_size_limit(self):
+        response = FakeResponse(b"x" * (search.MAX_RESPONSE_BYTES + 1))
+        with patch("urllib.request.urlopen", return_value=response):
+            with self.assertRaisesRegex(RuntimeError, "larger than 2 MiB"):
+                search.post_systemone("test-key", {})
+        self.assertEqual(response.read_sizes, [search.MAX_RESPONSE_BYTES + 1])
+
+    def test_http_error_detail_read_has_a_size_limit(self):
+        body = TrackingBytesIO(b"x" * (search.MAX_ERROR_DETAIL_BYTES + 1))
+        error = search.urllib.error.HTTPError(
+            search.API_URL,
+            500,
+            "Server error",
+            {},
+            body,
+        )
+        with patch("urllib.request.urlopen", side_effect=error):
+            with self.assertRaisesRegex(RuntimeError, "Jev returned HTTP 500"):
+                search.post_systemone("test-key", {})
+        self.assertEqual(body.read_sizes, [search.MAX_ERROR_DETAIL_BYTES])
 
     def test_save_key_is_private_and_loadable(self):
         env = os.environ.copy()

@@ -32,6 +32,8 @@ BATCH_SIZE = 470
 FIT_THRESHOLD = 0.5
 MAX_RESULTS = 64
 KEYWORD_LIMIT = 48
+MAX_RESPONSE_BYTES = 2 * 1024 * 1024
+MAX_ERROR_DETAIL_BYTES = 4096
 
 
 def key_path() -> Path:
@@ -199,17 +201,27 @@ def post_systemone(api_key: str, body: dict, timeout: float = 45) -> dict:
         )
         try:
             with urllib.request.urlopen(request, timeout=timeout) as response:
-                payload = json.loads(response.read().decode("utf-8"))
+                raw = response.read(MAX_RESPONSE_BYTES + 1)
+                if len(raw) > MAX_RESPONSE_BYTES:
+                    raise RuntimeError("Jev returned a response larger than 2 MiB.")
+                payload = json.loads(raw.decode("utf-8"))
         except urllib.error.HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace")[:400]
-            if exc.code == 401:
-                raise RuntimeError("Jev rejected the API key.") from exc
-            if exc.code in (429, 529) and attempt < 2:
-                last_detail = f"Jev is busy (HTTP {exc.code})."
-                time.sleep(1.5 * (attempt + 1))
-                continue
-            message = detail.strip() or f"HTTP {exc.code}"
-            raise RuntimeError(f"Jev returned HTTP {exc.code}: {message}") from exc
+            try:
+                if exc.code == 401:
+                    raise RuntimeError("Jev rejected the API key.") from exc
+                if exc.code in (429, 529) and attempt < 2:
+                    last_detail = f"Jev is busy (HTTP {exc.code})."
+                    time.sleep(1.5 * (attempt + 1))
+                    continue
+                detail = exc.read(MAX_ERROR_DETAIL_BYTES).decode(
+                    "utf-8", errors="replace"
+                )[:400]
+                message = detail.strip() or f"HTTP {exc.code}"
+                raise RuntimeError(
+                    f"Jev returned HTTP {exc.code}: {message}"
+                ) from exc
+            finally:
+                exc.close()
         except urllib.error.URLError as exc:
             raise RuntimeError(f"Could not reach Jev: {exc.reason}") from exc
         if not isinstance(payload, dict):
