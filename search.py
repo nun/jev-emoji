@@ -36,6 +36,16 @@ MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 MAX_ERROR_DETAIL_BYTES = 4096
 
 
+class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Turn redirects into HTTP errors so credentials are never forwarded."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+API_OPENER = urllib.request.build_opener(NoRedirectHandler())
+
+
 def key_path() -> Path:
     return Path.home() / ".config" / "jev-emoji" / "api-key"
 
@@ -200,7 +210,7 @@ def post_systemone(api_key: str, body: dict, timeout: float = 45) -> dict:
             },
         )
         try:
-            with urllib.request.urlopen(request, timeout=timeout) as response:
+            with API_OPENER.open(request, timeout=timeout) as response:
                 raw = response.read(MAX_RESPONSE_BYTES + 1)
                 if len(raw) > MAX_RESPONSE_BYTES:
                     raise RuntimeError("Jev returned a response larger than 2 MiB.")

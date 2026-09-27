@@ -97,7 +97,7 @@ class SearchTests(unittest.TestCase):
 
     def test_api_response_read_has_a_size_limit(self):
         response = FakeResponse(b"x" * (search.MAX_RESPONSE_BYTES + 1))
-        with patch("urllib.request.urlopen", return_value=response):
+        with patch.object(search.API_OPENER, "open", return_value=response):
             with self.assertRaisesRegex(RuntimeError, "larger than 2 MiB"):
                 search.post_systemone("test-key", {})
         self.assertEqual(response.read_sizes, [search.MAX_RESPONSE_BYTES + 1])
@@ -111,10 +111,32 @@ class SearchTests(unittest.TestCase):
             {},
             body,
         )
-        with patch("urllib.request.urlopen", side_effect=error):
+        with patch.object(search.API_OPENER, "open", side_effect=error):
             with self.assertRaisesRegex(RuntimeError, "Jev returned HTTP 500"):
                 search.post_systemone("test-key", {})
         self.assertEqual(body.read_sizes, [search.MAX_ERROR_DETAIL_BYTES])
+
+    def test_authenticated_api_requests_do_not_follow_redirects(self):
+        handler = search.NoRedirectHandler()
+        self.assertTrue(
+            any(
+                isinstance(item, search.NoRedirectHandler)
+                for item in search.API_OPENER.handlers
+            )
+        )
+        request = search.urllib.request.Request(
+            search.API_URL,
+            headers={"Authorization": "Bearer test-key"},
+        )
+        redirected = handler.redirect_request(
+            request,
+            None,
+            302,
+            "Found",
+            {"Location": "https://example.com/collect"},
+            "https://example.com/collect",
+        )
+        self.assertIsNone(redirected)
 
     def test_save_key_is_private_and_loadable(self):
         env = os.environ.copy()

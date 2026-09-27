@@ -51,7 +51,7 @@ Item {
     root.searchGen++
     root.queued = false
     displayModel.clear()
-    tokenField.text = ""
+    root.clearTokenInput()
     root.checkKey()
   }
 
@@ -102,6 +102,12 @@ Item {
     Qt.callLater(function() { keyCatcher.forceActiveFocus() })
   }
 
+  function clearTokenInput() {
+    tokenField.text = ""
+    if (!saveProc.running)
+      root.pendingToken = ""
+  }
+
   function parseLine(stdout) {
     var line = String(stdout || "").trim()
     var parts = line.split("\n")
@@ -115,10 +121,12 @@ Item {
 
   function close() {
     root.opened = false
+    root.clearTokenInput()
   }
 
   function dismiss() {
     root.opened = false
+    root.clearTokenInput()
     root.searchGen++
     root.queued = false
     if (searchProc.running)
@@ -335,7 +343,11 @@ Item {
       id: saveOut
       waitForEnd: true
     }
-    onStarted: saveProc.write(root.pendingToken + "\n")
+    onStarted: {
+      saveProc.write(root.pendingToken + "\n")
+      root.pendingToken = ""
+      tokenField.text = ""
+    }
     onExited: root.onTokenSaved(saveOut.text)
   }
 
@@ -463,6 +475,7 @@ Item {
         TextField {
           id: tokenField
           width: parent.width
+          password: true
           placeholderText: "Paste API key"
           foreground: root.foreground
           font.family: root.fontFamily
