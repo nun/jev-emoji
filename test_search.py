@@ -82,11 +82,50 @@ class SearchTests(unittest.TestCase):
                 path = Path(tmp) / ".config" / "jev-emoji" / "api-key"
                 self.assertEqual(path.read_text(encoding="utf-8"), "test-key")
                 self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+                self.assertEqual(path.parent.stat().st_mode & 0o777, 0o700)
+                self.assertEqual(list(path.parent.glob("*.tmp")), [])
                 self.assertEqual(search.load_api_key(), "test-key")
                 with redirect_stdout(io.StringIO()) as out:
                     code = search.main(["search.py", "--has-key"])
                 self.assertEqual(code, 0)
                 self.assertIn('"hasKey": true', out.getvalue())
+        finally:
+            os.environ.clear()
+            os.environ.update(env)
+
+    def test_save_key_is_private_before_the_secret_is_written(self):
+        env = os.environ.copy()
+        real_open = os.open
+        created = {}
+
+        def tracking_open(path, flags, mode=0o777, *, dir_fd=None):
+            descriptor = real_open(path, flags, mode, dir_fd=dir_fd)
+            name = os.fsdecode(path)
+            if name.endswith(".tmp"):
+                info = os.fstat(descriptor)
+                created["name"] = name
+                created["mode"] = info.st_mode & 0o777
+                created["inode"] = info.st_ino
+            return descriptor
+
+        try:
+            os.environ.pop("TYPESAFE_API_KEY", None)
+            with tempfile.TemporaryDirectory() as tmp:
+                os.environ["HOME"] = tmp
+                previous_umask = os.umask(0)
+                try:
+                    with patch("os.open", tracking_open):
+                        search.save_api_key("secret-key")
+                finally:
+                    os.umask(previous_umask)
+                path = Path(tmp) / ".config" / "jev-emoji" / "api-key"
+                self.assertEqual(created["mode"], 0o600)
+                self.assertNotEqual(Path(created["name"]).name, "api-key.tmp")
+                self.assertFalse(Path(created["name"]).exists())
+                self.assertEqual(path.stat().st_ino, created["inode"])
+                self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+                self.assertEqual(path.read_text(encoding="utf-8"), "secret-key")
+                self.assertEqual(list(path.parent.glob("*.tmp")), [])
         finally:
             os.environ.clear()
             os.environ.update(env)

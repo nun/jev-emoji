@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -58,12 +59,33 @@ def save_api_key(raw: str) -> None:
     if not text or any(char in text for char in "\n\r\x00"):
         raise RuntimeError("Paste one API key, on one line.")
     path = key_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(path.name + ".tmp")
-    temporary.write_text(text, encoding="utf-8")
-    temporary.chmod(0o600)
-    temporary.replace(path)
-    path.chmod(0o600)
+    directory = path.parent
+    # New directories should not be readable by other users, even if the
+    # process umask is wide open. umask applies to mkdir, so set it first.
+    previous_umask = os.umask(0o077)
+    try:
+        directory.mkdir(parents=True, exist_ok=True)
+    finally:
+        os.umask(previous_umask)
+    os.chmod(directory, 0o700)
+    # mkstemp creates a unique file as mode 0600 before we write the key.
+    # A fixed name such as api-key.tmp would be readable until a later chmod.
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=".api-key.",
+        suffix=".tmp",
+        dir=directory,
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
+    os.chmod(path, 0o600)
 
 
 def load_catalog(path: Path) -> list[dict]:
